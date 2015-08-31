@@ -1,0 +1,12 @@
+[ClassVersion("1.0.0"), FriendlyName("rsGetCloudFiles")]
+class RS_rsGetCloudFiles : OMI_BaseResource
+{
+[key,Description("Container Name")]string Container;
+[write,Descrition("Region for Container")]string Region;
+[write,Description("Authentication Credential"),EmbeddedInstance("MSFT_Credential")]string Credential;
+[write,Description("Select a sync mode to use, File or Directory"),ValueMap{"File", "Directory"}]string SyncMode;
+[write,Description("File Path for file or directory to sync into.")]string FilePath;
+[write,Description("Filename for File Sync, ignore for Directory")]string Filename;
+[write,Description("Match Source Attribute")]boolean MatchSource;
+[write,ValueMap{"Present", "Absent"},Values{"Present", "Absent"}] string Ensure;
+};
