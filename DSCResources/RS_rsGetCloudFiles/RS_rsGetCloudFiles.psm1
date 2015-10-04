@@ -73,8 +73,8 @@ function Get-TargetResource
             {
                 $fileheader = (Invoke-WebRequest -Uri $($api + "/$Container/$($file -replace '\\','/')") -Method HEAD -Headers $authToken).Headers
                 $fileinfo = Get-ChildItem $FullPath
-                Write-Verbose "SyncMode: $SyncMode File check: $($file.BaseName)"
-                if(($fileheader.'Content-Length' -lt 5GB) -and ($file.Length -lt 5GB))
+                Write-Verbose "SyncMode: $SyncMode File check: $($fileinfo.BaseName)"
+                if(($fileheader.'Content-Length' -lt 5GB) -and ($fileinfo.Length -lt 5GB))
                 {
                     $FileHash = (Get-FileHash $fileinfo.FullName -Algorithm MD5).hash.tolower()
                     $Hashmatch = $fileheader.ETag -match $FileHash
