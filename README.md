@@ -1,6 +1,18 @@
 rsBlobStorage
 =====
 
-This module contains tools for retreiving files/content from Cloud File storage containers as part of DSC. This will also include S3 Buckets in the future via AWS Powershell tools.
+This module contains tools for retreiving files/content from Cloud File storage containers as part of DSC.
 
-rsGetCloudFiles
+```PoSh
+rsGetCloudFiles Packages
+{
+	Container = "Packages"
+	Region = "DFW"
+	Credential = $Credentials.User1
+	SyncMode = "Directory"
+	FilePath = "C:\DevOps\Packages"
+	FileName = $null
+	MatchSource = $True
+	Ensure = "Present"
+}
+```

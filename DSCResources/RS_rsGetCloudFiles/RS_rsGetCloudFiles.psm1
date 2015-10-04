@@ -61,25 +61,28 @@ function Get-TargetResource
     if(Test-Path($FullPath)){$Exist = $true}else{$Exist = $false}
     #Write-Output @PSBoundParameters
     Write-Verbose $PSBoundParameters
+    $noHash = $false
 
     #Note: Hashmatching works for files under 5GB only.
     if(($Ensure -eq "Present") -and ($Exist -eq $true) -and ($MatchSource -eq $true))
     {
+        Write-Verbose "Ensure is Present. FilePath exists. Testing MatchSource."
         if($SyncMode -eq "File")
         {
-            $file = Get-ChildItem $FullPath
-            Write-Verbose "File check: $($file.BaseName)"
-            if($file.Length -lt 5GB)
+            if(Test-Path -Path $FullPath)
             {
-                $FileHash = (Get-FileHash $file.FullName -Algorithm MD5).hash.tolower()
-                $ETag = (Invoke-WebRequest -Uri $($api + "/$Container/$($Filename -replace '\\','/')") -Method Head -Headers $authToken).Headers.ETag
-                $Hashmatch = $ETag -match $FileHash
-                Write-Verbose "`tFileHash: $Filehash `tEtag: $ETag `tHashmatch: $Hashmatch"
-            }
-            else
-            {
-                Write-Verbose "The file $FileName is too large. Recommend Setting MatchSource to false for this file."
-                $noHash = $true
+                $fileheader = (Invoke-WebRequest -Uri $($api + "/$Container/$($file -replace '\\','/')") -Method HEAD -Headers $authToken).Headers
+                $fileinfo = Get-ChildItem $FullPath
+                Write-Verbose "SyncMode: $SyncMode File check: $($file.BaseName)"
+                if(($fileheader.'Content-Length' -lt 5GB) -and ($file.Length -lt 5GB))
+                {
+                    $FileHash = (Get-FileHash $fileinfo.FullName -Algorithm MD5).hash.tolower()
+                    $Hashmatch = $fileheader.ETag -match $FileHash
+                    Write-Verbose "`n`tFileHash: $Filehash `n`tEtag: $($fileheader.ETag) `n`tHashmatch: $Hashmatch `n"
+                }else{
+                    Write-Verbose "The file $FileName is too large. Recommend Setting MatchSource to false for this file."
+                    $noHash = $true
+                }
             }
         }
         else
@@ -87,50 +90,75 @@ function Get-TargetResource
             $Filelist = (Invoke-RestMethod -Uri $($api + "/$Container") -Method GET -Headers $authToken) -split "\n" | ? {($_ -notlike ".file-segments*") -and ($_ -notlike $null)}
             foreach ($file in $Filelist)
             {
-                #Write-output "File to check: $file"
-                $FullPath = ($FilePath, $file -join '\')
-                if(Test-Path -Path $FullPath)
+                $fileheader = (Invoke-WebRequest -Uri $($api + "/$Container/$($file -replace '\\','/')") -Method HEAD -Headers $authToken).Headers
+                Write-Verbose "SyncMode: $SyncMode. File to check: $file"
+                if(($fileheader.'Content-Type' -match "directory") -and (Test-Path ($FullPath, $($file -replace '/','\') -join '\')) -and ((Get-Item ($FullPath, $($file -replace '/','\') -join '\')).Attributes -match "Directory"))
+                    {Write-Verbose "Directory Path confirmed: $($FullPath, $($file -replace '/','\') -join '\') `n"}
+                elseif(($fileheader.'Content-Type' -notmatch "directory") -and (Test-Path -Path ($FullPath, $($file -replace '/','\') -join '\')))
                 {
-                    $file = Get-ChildItem $FullPath
-                    Write-Verbose "File check: $($file.BaseName)"
-                    if($file.Length -lt 5GB)
+                    $fileinfo = Get-ChildItem ($FullPath, $($file -replace '/','\') -join '\')
+                    Write-Verbose "Hash check for local file: $($fileinfo.BaseName) `n"
+                    if(($fileheader.'Content-Length' -lt 5GB) -and ($fileinfo.Length -lt 5GB))
                     {
-                        $FileHash = (Get-FileHash $file.FullName -Algorithm MD5).hash.tolower()
-                        $ETag = (Invoke-WebRequest -Uri $($api + "/$Container/$($file.FullName.TrimStart($FilePath) -replace '\\','/')") -Method Head -Headers $authToken).Headers.ETag
-                        $CheckHash = $ETag -match $FileHash
-                        if(($Hashmatch -ne $null) -and ($Hashmatch -ne $false)){$Hashmatch = $CheckHash}
-                        Write-Verbose "`tFileHash: $Filehash `tEtag: $ETag `tHashmatch: $CheckHash"
+                        $FileHash = (Get-FileHash $fileinfo.FullName -Algorithm MD5).hash.tolower()
+                        $CheckHash = $fileheader.ETag -match $FileHash
+                        if($Hashmatch -ne $false){$Hashmatch = $CheckHash}
+                        Write-Verbose "`n`tFileHash: $Filehash `n`tEtag: $($fileheader.ETag) `n`tHashmatch: $CheckHash `n"
                     }
                     else
                     {
-                        Write-Verbose "The File $($File.BaseName) is larger than 5GB and will not be matched to source."
+                        Write-Verbose "The File $($fileinfo.BaseName) is larger than 5GB and will not be matched to source."
                         $noHash = $true
                     }
                 }else{
-                    Write-Verbose "File Missing: $file"
+                    Write-Verbose "Content Missing: $file"
                     $Hashmatch = $false
                 }
             }
+            Write-Verbose "Filecheck Complete. Hashmatch: $Hashmatch NoHash: $noHash"
         }
-        if($noHash -eq $null){$SyncStatus = $Hashmatch}
+        if($noHash -eq $null)
+        {
+            $SyncStatus = $Hashmatch
+        }
         elseif(($noHash -eq $true) -and ($SyncMode -eq "File"))
         {
-            Write-Verbose "NoHash and SyncMode is File"
+            Write-Verbose "File too large and SyncMode is File"
             $SyncStatus = $true
         }elseif($SyncMode -eq "File"){
-            Write-Verbose "Hash and SyncMode is File"
-            $SyncStatus = $false
+            Write-Verbose "Hashmatch completed and SyncMode is File"
+            $SyncStatus = $Hashmatch
         }elseif(($noHash -eq $true) -and ($SyncMode -eq "Directory"))
         {
-            Write-Verbose "NoHash and SyncMode is Directory"
+            Write-Verbose "File or Files greater than 5GB found and SyncMode is Directory"
             $SyncStatus = $Hashmatch
         }else{
-            Write-Verbose "Hash and SyncMode is Directory"
-            $SyncStatus = $false
+            Write-Verbose "Hashmatch completed and SyncMode is Directory"
+            $SyncStatus = $Hashmatch
         }
     }
-    elseif(($Ensure -eq "Present") -and ($Exist -eq $true))
+    elseif(($Ensure -eq "Present") -and (!($FileName)) -and ($Exist -eq $true))
+    {
+        $Filelist = (Invoke-RestMethod -Uri $($api + "/$Container") -Method GET -Headers $authToken) -split "\n" | ? {($_ -notlike ".file-segments*") -and ($_ -notlike $null)}
+            foreach ($file in $Filelist)
+            {
+                Write-Verbose "Testing Path existence of: $file"
+                if((Test-Path -Path ($FullPath, $($file -replace '/','\') -join '\')) -and ($SyncStatus -ne $false))
+                {$SyncStatus = $true}else{$SyncStatus = $false}
+            }
+    }
+    elseif(($Ensure -eq "Present") -and ($FileName -ne $null) -and ($Exist -eq $true))
         {$SyncStatus = $true}
+    elseif(($Ensure -eq "Absent") -and (!($FileName)) -and ($Exist -eq $true))
+    {
+        $Filelist = (Invoke-RestMethod -Uri $($api + "/$Container") -Method GET -Headers $authToken) -split "\n" | ? {($_ -notlike ".file-segments*") -and ($_ -notlike $null)}
+            foreach ($file in $Filelist)
+            {
+                Write-Verbose "Testing Path existence of: $file"
+                if(!(Test-Path -Path ($FullPath, $($file -replace '/','\') -join '\')) -and ($SyncStatus -ne $false))
+                {$SyncStatus = $true}else{$SyncStatus = $false}
+            }
+    }
     elseif(($Ensure -eq "Absent") -and ($Exist -eq $true))
         {$SyncStatus = $false}
     elseif($Ensure -eq "Absent")
@@ -138,7 +166,7 @@ function Get-TargetResource
     else
         {$SyncStatus = "unknown"}
 
-    Write-Verbose "SyncMode Status is: $SyncStatus"
+    Write-Verbose "Sync Status is: $SyncStatus"
 
     Return @{
             Container = $Container;
@@ -185,7 +213,7 @@ function Set-TargetResource
             #If Item Exists, Remove it.
             Get-ChildItem -Path $FullPath -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
             #Download item from Cloud Files
-            (Invoke-WebRequest -Uri $($api + "/$Container/$($Filename -replace '\\','/')") -Method GET -Headers $authToken -OutFile $($FullPath))
+            (Invoke-WebRequest -Uri $($api + "/$Container/$($file -replace '\\','/')") -Method GET -Headers $authToken -OutFile $($FullPath))
         }
         else
         {
@@ -193,23 +221,44 @@ function Set-TargetResource
             $Filelist = (Invoke-RestMethod -Uri $($api + "/$Container") -Method GET -Headers $authToken) -split "\n" | ? {($_ -notlike ".file-segments*") -and ($_ -notlike $null)}
             foreach ($file in $Filelist)
             {
-                if(Test-Path ($FullPath, $($file -replace '/','\') -join '\'))
+                $fileheader = (Invoke-WebRequest -Uri $($api + "/$Container/$($file -replace '\\','/')") -Method HEAD -Headers $authToken).Headers
+                if($fileheader.'Content-Type' -match "directory")
                 {
-                    $file = Get-ChildItem $($FullPath, $($file -replace '/','\') -join '\')
-                    if($file.Length -lt 5GB)
+                    Try
                     {
-                        $FileHash = (Get-FileHash $file.FullName -Algorithm MD5).hash.tolower()
-                        $ETag = (Invoke-WebRequest -Uri $($api,$Container,$($file.FullName.TrimStart($FilePath) -replace '\\','/') -join '/') -Method Head -Headers $authToken).Headers.ETag
-                        if(!($ETag -match $FileHash))
-                        {
-                            $file | Remove-Item -Force -ErrorAction SilentlyContinue
-                            (Invoke-WebRequest -Uri $($api + "/$Container/$($file.FullName.TrimStart($FilePath) -replace '\\','/')") -Method GET -Headers $authToken -OutFile $($file.FullName))
+                        if((Test-Path ($FullPath, $($file -replace '/','\') -join '\')) -and ((Get-Item ($FullPath, $($file -replace '/','\') -join '\')).Attributes -match "Directory"))
+                        {Write-Verbose "Directory Path Already created"}
+                        else{
+                        Write-Verbose "Directory Path Missing: $($FullPath, $($file -replace '/','\') -join '\')"
+                        New-Item -ItemType Directory -Path ($FullPath, $($file -replace '/','\') -join '\') -Force
                         }
                     }
-                    else{Write-Verbose "File $($file.BaseName) Larger than 5GB. Not seeking Hash-match for $($file.FullName)"}
+                    Catch
+                    {
+                        Write-Verbose "Invalid File Found. Removing and replacing file."
+                        Get-Item -Path ($FullPath, $($file -replace '/','\') -join '\') | Remove-Item -Force
+                        New-Item -ItemType Directory -Path ($FullPath, $($file -replace '/','\') -join '\') -Force
+                    }Finally{
+                        if((Get-Item ($FullPath, $($file -replace '/','\') -join '\')).Attributes -match "Directory")
+                            {Write-Verbose "Directory Successfully Created: $($FullPath, $($file -replace '/','\') -join '\'))"}
+                    }
+                }
+                elseif(($fileheader.'Content-Type' -notmatch "directory") -and (Test-Path ($FullPath, $($file -replace '/','\') -join '\')))
+                {
+                    $fileinfo = Get-ChildItem $($FullPath, $($file -replace '/','\') -join '\')
+                    if(($fileheader.'Content-Length' -lt 5GB) -and ($fileinfo.Length -lt 5GB))
+                    {
+                        $FileHash = (Get-FileHash $fileinfo.FullName -Algorithm MD5).hash.tolower()
+                        if(!($fileheader.ETag -match $FileHash))
+                        {
+                            $fileinfo | Remove-Item -Force -ErrorAction SilentlyContinue
+                            (Invoke-WebRequest -Uri $($api + "/$Container/$($file -replace '\\','/')") -Method GET -Headers $authToken -OutFile $($fileinfo.FullName))
+                        }
+                    }
+                    else{Write-Verbose "File $($fileinfo.BaseName) exists and is larger than 5GB. Not seeking Hash-match for $($file.FullName)"}
                 }else{
-                    Write-Verbose "File $FileName is missing. Downloading this file."
-                    (Invoke-WebRequest -Uri $($api + "/$Container/$file") -Method GET -Headers $authToken -OutFile $($FullPath, $($file -replace '/','\' -replace ':','_') -join '\'))
+                    Write-Verbose "File $File is missing. Downloading this file."
+                    (Invoke-WebRequest -Uri $($api + "/$Container/$($file -replace '\\','/')") -Method GET -Headers $authToken -OutFile $($FullPath, $($file -replace '/','\') -join '\'))
                 }
             }
         }
