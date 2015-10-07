@@ -62,8 +62,22 @@ function Get-TargetResource
     $authToken = Get-Authtoken -catalog $catalog
     $api = Get-API -catalog $catalog -region $region
     
-    if($FileName -ne $null){$FullPath = ($FilePath, $FileName -join '\')}else{$FullPath = $FilePath}
-    if(Test-Path($FullPath)){$Exist = $true}else{$Exist = $false}
+    if($FileName -ne $null)
+    {
+        $FullPath = ($FilePath, $FileName -join '\')
+    }
+    else
+    {
+        $FullPath = $FilePath
+    }
+    if(Test-Path($FullPath))
+    {
+        $Exist = $true
+    }
+    else
+    {
+        $Exist = $false
+    }
     Write-Verbose $PSBoundParameters
     $noHash = $false
 
@@ -236,8 +250,22 @@ function Set-TargetResource
     $authToken = Get-Authtoken -catalog $catalog
     $api = Get-API -catalog $catalog -region $region
     
-    if($FileName -ne $null){$FullPath = ($FilePath, $FileName -join '\')}else{$FullPath = $FilePath}
-    if(Test-Path($FullPath)){$Exist = $true}else{$Exist = $false}
+    if($FileName -ne $null)
+    {
+        $FullPath = ($FilePath, $FileName -join '\')
+    }
+    else
+    {
+        $FullPath = $FilePath
+    }
+    if(Test-Path($FullPath))
+    {
+        $Exist = $true
+    }
+    else
+    {
+        $Exist = $false
+    }
     Write-Verbose $PSBoundParameters
 
     #Note: Current configuration and restrictions block syncing of segmented files at this time.
