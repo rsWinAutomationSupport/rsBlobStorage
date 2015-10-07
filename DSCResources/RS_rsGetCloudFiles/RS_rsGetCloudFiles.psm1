@@ -2,10 +2,10 @@ Function Get-Catalog
 {
     param
     (
+        [string]$identityURI,
         [Parameter(Mandatory)]
         [pscredential]$Credential
     )
-    $identityURI = "https://identity.api.rackspacecloud.com/v2.0/tokens"
     $credJson = @{"auth" = @{"RAX-KSKEY:apiKeyCredentials" =  @{"username" = $Credential.UserName; "apiKey" = $Credential.GetNetworkCredential().Password}}} | convertTo-Json
     $catalog = Invoke-RestMethod -Uri $identityURI -Method POST -Body $credJson -ContentType application/json
     Return $catalog
@@ -39,6 +39,7 @@ function Get-TargetResource
         [Parameter(Mandatory)]
         [ValidateNotNullOrEmpty()]
         [string] $Region,
+        [string]$identityURI = "https://identity.api.rackspacecloud.com/v2.0/tokens",
         [Parameter(Mandatory)]
         [pscredential]$Credential,
         [ValidateSet("File","Directory")]
@@ -50,10 +51,10 @@ function Get-TargetResource
         [ValidateSet("Present", "Absent")]
         [string] $Ensure = "Present"
     )
-
+    
     #Presets
     if($FileName -match '/'){$FileName = $FileName -replace '/','\'}
-    $catalog = Get-Catalog -Credential $Credential
+    $catalog = Get-Catalog -identityURI $identityURI -Credential $Credential
     $authToken = Get-Authtoken -catalog $catalog
     $api = Get-API -catalog $catalog -region $region
     
@@ -184,6 +185,7 @@ function Set-TargetResource
         [Parameter(Mandatory)]
         [ValidateNotNullOrEmpty()]
         [string] $Region,
+        [string]$identityURI = "https://identity.api.rackspacecloud.com/v2.0/tokens",
         [Parameter(Mandatory)]
         [pscredential]$Credential,
         [ValidateSet("File","Directory")]
@@ -198,7 +200,7 @@ function Set-TargetResource
 
     #Presets
     if($FileName -match '/'){$FileName = $FileName -replace '/','\'}
-    $catalog = Get-Catalog -Credential $Credential
+    $catalog = Get-Catalog -identityURI $identityURI -Credential $Credential
     $authToken = Get-Authtoken -catalog $catalog
     $api = Get-API -catalog $catalog -region $region
     
@@ -279,6 +281,7 @@ function Test-TargetResource
         [Parameter(Mandatory)]
         [ValidateNotNullOrEmpty()]
         [string] $Region,
+        [string]$identityURI = "https://identity.api.rackspacecloud.com/v2.0/tokens",
         [Parameter(Mandatory)]
         [pscredential]$Credential,
         [ValidateSet("File","Directory")]

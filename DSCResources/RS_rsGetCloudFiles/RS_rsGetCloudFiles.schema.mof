@@ -2,7 +2,8 @@
 class RS_rsGetCloudFiles : OMI_BaseResource
 {
 [key,Description("Container Name")]string Container;
-[write,Descrition("Region for Container")]string Region;
+[write,Description("Region for Container")]string Region;
+[write,Description("Identity System URI")]string IdentityURI;
 [write,Description("Authentication Credential"),EmbeddedInstance("MSFT_Credential")]string Credential;
 [write,Description("Select a sync mode to use, File or Directory"),ValueMap{"File", "Directory"}]string SyncMode;
 [write,Description("File Path for file or directory to sync into.")]string FilePath;
