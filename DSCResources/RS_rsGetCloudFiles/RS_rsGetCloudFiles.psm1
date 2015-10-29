@@ -92,7 +92,7 @@ function Get-TargetResource
             if(Test-Path -Path $FullPath)
             {
                 #Get a copy of the CloudFiles headers, especially the ETag value (MD5 checksum)
-                $fileheader = (Invoke-WebRequest -Uri $($api + "/$Container/$($file -replace '\\','/')") -Method HEAD -Headers $authToken).Headers
+                $fileheader = (Invoke-WebRequest -Uri $($api + "/$Container/$($file -replace '\\','/')") -Method HEAD -Headers $authToken  -UseBasicParsing).Headers
                 $fileinfo = Get-ChildItem $FullPath
                 Write-Verbose "SyncMode: $SyncMode File check: $($fileinfo.BaseName)"
                 #Test content to see whether file is greater than 5GB locally or on CloudFiles
@@ -114,11 +114,12 @@ function Get-TargetResource
             #File test for a container with numerous files.
             #note: does not currently allow a 'wildcard' reference using file parameter.
             $Filelist = (Invoke-RestMethod -Uri $($api + "/$Container") -Method GET -Headers $authToken) -split "\n" | ? {($_ -notlike ".file-segments*") -and ($_ -notlike $null)}
+            Write-Verbose "SyncMode: $SyncMode"
             foreach ($file in $Filelist)
             {
                 #For each listed item(file/folder), Grab the fileheader details.
-                $fileheader = (Invoke-WebRequest -Uri $($api + "/$Container/$($file -replace '\\','/')") -Method HEAD -Headers $authToken).Headers
-                Write-Verbose "SyncMode: $SyncMode. File to check: $file"
+                $fileheader = (Invoke-WebRequest -Uri $($api + "/$Container/$($file -replace '\\','/')") -Method HEAD -Headers $authToken -UseBasicParsing).Headers
+                Write-Verbose "File to check: $file"
                 #Test whether item referenced is a sudo-directory in the API and exists on the filesystem
                 if(($fileheader.'Content-Type' -match "directory") -and (Test-Path ($FullPath, $($file -replace '/','\') -join '\')) -and ((Get-Item ($FullPath, $($file -replace '/','\') -join '\')).Attributes -match "Directory"))
                     {Write-Verbose "Directory Path confirmed: $($FullPath, $($file -replace '/','\') -join '\') `n"}
@@ -277,7 +278,9 @@ function Set-TargetResource
             #If Item Exists, Remove it.
             Get-ChildItem -Path $FullPath -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
             #Download item from Cloud Files
-            (Invoke-WebRequest -Uri $($api + "/$Container/$($file -replace '\\','/')") -Method GET -Headers $authToken -OutFile $($FullPath))
+            $webclient = New-Object System.Net.WebClient
+            $webclient.headers.Add("X-Auth-Token",$authToken.'X-Auth-Token')
+            $webclient.DownloadFile($($api + "/$Container/$($file -replace '\\','/')"),$($FullPath))
         }
         #For syncing of an entire CloudFiles container. (excludes direct downloading of file-segments)
         else
@@ -289,7 +292,7 @@ function Set-TargetResource
             foreach ($file in $Filelist)
             {
                 #Grab file headers for current item.
-                $fileheader = (Invoke-WebRequest -Uri $($api + "/$Container/$($file -replace '\\','/')") -Method HEAD -Headers $authToken).Headers
+                $fileheader = (Invoke-WebRequest -Uri $($api + "/$Container/$($file -replace '\\','/')") -Method HEAD -UseBasicParsing -Headers $authToken).Headers
                 #Verify whether file is a folder or a file.
                 if($fileheader.'Content-Type' -match "directory")
                 {
@@ -329,7 +332,9 @@ function Set-TargetResource
                         {
                             #If the file doesn't match, Remove it and re-download.
                             $fileinfo | Remove-Item -Force -ErrorAction SilentlyContinue
-                            (Invoke-WebRequest -Uri $($api + "/$Container/$($file -replace '\\','/')") -Method GET -Headers $authToken -OutFile $($fileinfo.FullName))
+                            $webclient = New-Object System.Net.WebClient
+                            $webclient.headers.Add("X-Auth-Token",$authToken.'X-Auth-Token')
+                            $webclient.DownloadFile($($api + "/$Container/$($file -replace '\\','/')"),$($fileinfo.FullName))
                         }
                     }
                     #In the event file exists & is larger than 5GB, Remark on the file in Verbose-mode.
@@ -337,7 +342,9 @@ function Set-TargetResource
                 }else{
                     #file not found. Download it.
                     Write-Verbose "File $File is missing. Downloading this file."
-                    (Invoke-WebRequest -Uri $($api + "/$Container/$($file -replace '\\','/')") -Method GET -Headers $authToken -OutFile $($FullPath, $($file -replace '/','\') -join '\'))
+                    $webclient = New-Object System.Net.WebClient
+                    $webclient.headers.Add("X-Auth-Token",$authToken.'X-Auth-Token')
+                    $webclient.DownloadFile($($api + "/$Container/$($file -replace '\\','/')"),$($FullPath, $($file -replace '/','\') -join '\'))
                 }
             }
         }
