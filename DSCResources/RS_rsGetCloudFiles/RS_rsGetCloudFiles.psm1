@@ -301,6 +301,12 @@ function Set-TargetResource
                         #Test to ensure the directory IS a directory locally. create it if missing.
                         if((Test-Path ($FullPath, $($file -replace '/','\') -join '\')) -and ((Get-Item ($FullPath, $($file -replace '/','\') -join '\')).Attributes -match "Directory"))
                         {Write-Verbose "Directory Path Already created"}
+                        elseif(Test-Path ($FullPath, $($file -replace '/','\') -join '\'))
+                        {
+                            Write-Verbose "Invalid File Found. Removing and replacing file."
+                            Get-Item -Path ($FullPath, $($file -replace '/','\') -join '\') | Remove-Item -Force
+                            New-Item -ItemType Directory -Path ($FullPath, $($file -replace '/','\') -join '\') -Force
+                        }
                         else{
                         Write-Verbose "Directory Path Missing: $($FullPath, $($file -replace '/','\') -join '\')"
                         New-Item -ItemType Directory -Path ($FullPath, $($file -replace '/','\') -join '\') -Force
@@ -308,11 +314,7 @@ function Set-TargetResource
                     }
                     Catch
                     {
-                        #Solving for a file where a folder should be. Removes the file, then creates the folder
-                        #WARNING: This is a destructive process. Be aware that this could remove a file created in the folder.
-                        Write-Verbose "Invalid File Found. Removing and replacing file."
-                        Get-Item -Path ($FullPath, $($file -replace '/','\') -join '\') | Remove-Item -Force
-                        New-Item -ItemType Directory -Path ($FullPath, $($file -replace '/','\') -join '\') -Force
+                        Write-Verbose "Set Directory Process Result: $?"
                     }Finally{
                         #Verifies the above attempts completed by responding on successful directory creation/existence.
                         if((Get-Item ($FullPath, $($file -replace '/','\') -join '\')).Attributes -match "Directory")
