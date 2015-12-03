@@ -280,7 +280,7 @@ function Set-TargetResource
             #Download item from Cloud Files
             $webclient = New-Object System.Net.WebClient
             $webclient.headers.Add("X-Auth-Token",$authToken.'X-Auth-Token')
-            $webclient.DownloadFile($($api + "/$Container/$($file -replace '\\','/')"),$($FullPath))
+            $webclient.DownloadFile($($api + "/$Container/$($FileName -replace '\\','/')"),$($FullPath))
         }
         #For syncing of an entire CloudFiles container. (excludes direct downloading of file-segments)
         else
